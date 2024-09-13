@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Map of Ethiopia</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+    body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            display: flex;
+        }
+        #text-container {
+            margin-top: 70px;
+            width: 30%;
+            height: auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-right: 20px;
+            border-radius: 8px;
+            margin-bottom: 200px;
+        }
+        #text-container h2 {
+            font-size: 24px;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #27ae60;
+            padding-bottom: 10px;
+        }
+        #text-container p {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: #555;
+        }
+        #text-container p:last-child {
+            margin-bottom: 0;
+        }
+        #map-container {
+            margin-top: 70px;
+            width: 70%;
+            height: auto;
+            border: 5px solid #000;
+            box-sizing: border-box;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 50px;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        .leaflet-tooltip {
+            font-size: 20px;
+            font-weight: bold;
+            color: #fff; /* Change to white for better visibility */
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 5px 10px; /* Slightly larger padding for readability */
+            border-radius: 4px;
+        }
+        /* Modal styles */
+        #agricultureModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 600px;
+            padding: 20px;
+            background: white;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            z-index: 1000;
+        }
+        #agricultureModal button {
+            display: block;
+            margin: 20px auto 0;
+            padding: 10px 20px;
+            border: none;
+            background-color: #27ae60;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #agricultureModal button:hover {
+            background-color: #2ecc71;
+        }
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+    </style>
+</head>
+<body>
+
+
+<div class="container">
+    <div id="text-container">
+        <h2>Explore Ethiopia</h2>
+        <p>Welcome to the interactive map of Ethiopia. Click on a region to zoom in and explore the zones and woredas. Hover over any region, zone, or woreda to see its name.</p>
+        <p>This map is designed to give you a detailed view of the administrative divisions of Ethiopia, including its regions, zones, and woredas.</p>
+        <p>Enjoy navigating through the diverse and rich landscape of Ethiopia!</p>
+    </div>
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div id="overlay"></div>
+<div id="agricultureModal"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+var map = L.map('map', {
+    center: [9.145, 40.489673],
+    zoom: 5.5,
+    zoomControl: true,
+    dragging: false,
+    touchZoom: true,
+    attributionControl: false 
+});
+
+var regionsLayer, zonesLayer, woredasLayer, kebelesLayer;
+
+function loadRegions() {
+    $.getJSON('region.geojson', function(data) {
+        regionsLayer = L.geoJSON(data, {
+            style: function () {
+                return {
+                    color: "#2980b9", 
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.6,
+                    fillColor: "#3498db" 
+                };
+            },
+            onEachFeature: function (feature, layer) {
+                layer.bindTooltip(feature.properties.ADM1_EN, { permanent: false, direction: 'auto' });
+                layer.on('click', function () {
+                    highlightFeature(layer);
+                    loadZones(feature.properties.ADM1_PCODE);
+                });
+                layer.on('mouseover', function () {
+                    layer.setStyle({
+                        fillOpacity: 0.8,
+                        weight: 3
+                    });
+                });
+                layer.on('mouseout', function () {
+                    regionsLayer.resetStyle(layer);
+                });
+            }
+        }).addTo(map);
+    });
+}
+
+function loadZones(regionCode) {
+    $.getJSON('zone.geojson', function(data) {
+        if (zonesLayer) map.removeLayer(zonesLayer);
+        zonesLayer = L.geoJSON(data, {
+            filter: function (feature) {
+                return feature.properties.ADM1_PCODE === regionCode;
+            },
+            style: function () {
+                return {
+                    color: "#27ae60", 
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.6,
+                    fillColor: "#2ecc71" 
+                };
+            },
+            onEachFeature: function (feature, layer) {
+                layer.bindTooltip(feature.properties.ADM2_EN, { permanent: false, direction: 'auto' });
+                layer.on('click', function () {
+                    highlightFeature(layer);
+                    loadWoredas(feature.properties.ADM2_PCODE);
+                });
+                layer.on('mouseover', function () {
+                    layer.setStyle({
+                        fillOpacity: 0.8,
+                        weight: 3
+                    });
+                });
+                layer.on('mouseout', function () {
+                    zonesLayer.resetStyle(layer);
+                });
+            }
+        }).addTo(map);
+    });
+}
+
+function loadWoredas(zoneCode) {
+    $.getJSON('woreda.geojson', function(data) {
+        if (woredasLayer) map.removeLayer(woredasLayer);
+        woredasLayer = L.geoJSON(data, {
+            filter: function (feature) {
+                return feature.properties.ADM2_PCODE === zoneCode;
+            },
+            style: function () {
+                return {
+                    color: "#e74c3c", 
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 1, 
+                    fillColor: "#e67e22" 
+                };
+            },
+            onEachFeature: function (feature, layer) {
+                layer.bindTooltip(feature.properties.ADM3_EN, { permanent: false, direction: 'auto' });
+
+                layer.on('click', function () {
+                    highlightFeature(layer);
+                    loadKebeles(feature.properties.ADM3_PCODE);
+                });
+
+                layer.on('mouseover', function () {
+                    layer.setStyle({
+                        fillOpacity: 0.8,
+                        weight: 3
+                    });
+                });
+
+                layer.on('mouseout', function () {
+                    woredasLayer.resetStyle(layer);
+                });
+            }
+        }).addTo(map);
+    });
+}
+function loadKebeles(woredaCode) {
+    $.getJSON('kebele.geojson', function(data) {
+        if (kebelesLayer) map.removeLayer(kebelesLayer);
+        kebelesLayer = L.geoJSON(data, {
+            filter: function (feature) {
+                return feature.properties.ADM3_PCODE === woredaCode; // Filter kebeles by woreda code
+            },
+            style: function () {
+                return {
+                    color: "#8e44ad", 
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8,
+                    fillColor: "#9b59b6" 
+                };
+            },
+            onEachFeature: function (feature, layer) {
+                layer.bindTooltip(feature.properties.RK_NAME, { permanent: false, direction: 'auto' });
+
+                layer.on('click', function () {
+                    highlightFeature(layer);
+                    loadKebeles(feature.properties.RK_CODE);
+                });
+                layer.on('mouseout', function () {
+                    kebelesLayer.resetStyle(layer);
+                });
+
+                layer.on('click', function () {
+                    highlightFeature(layer);
+                    showDetailedMapForKebele(layer.getBounds()); // Show kebele-specific map
+                });
+            }
+        }).addTo(map);
+    });
+}
+
+function highlightFeature(layer) {
+    regionsLayer && regionsLayer.eachLayer(function(l) {
+        regionsLayer.resetStyle(l);
+    });
+    zonesLayer && zonesLayer.eachLayer(function(l) {
+        zonesLayer.resetStyle(l);
+    });
+    woredasLayer && woredasLayer.eachLayer(function(l) {
+        woredasLayer.resetStyle(l);
+    });
+    kebelesLayer && kebelesLayer.eachLayer(function(l) {
+        kebelesLayer.resetStyle(l);
+    });
+
+    layer.setStyle({
+        color: "#000", 
+        weight: 4,
+        opacity: 1,
+        fillOpacity: 0.8
+    });
+
+    map.fitBounds(layer.getBounds(), {padding: [50, 50]});
+}
+
+loadRegions();
+
+</script>
+
+
+</body>
+</html>
